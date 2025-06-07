@@ -1,4 +1,5 @@
 import math
+from collections import defaultdict
 
 
 def distancia_euclidiana(p1, p2):
@@ -39,8 +40,9 @@ class Cluster:
 
 
 class Clusterizacao:
-    def __init__(self):
+    def __init__(self, limiar=5.0):
         self.clusters = []
+        self.limiar = limiar
 
     def iniciar_com_dois(self, registro1, registro2):
         self.clusters.append(Cluster(registro1))
@@ -69,8 +71,7 @@ class Clusterizacao:
         if len(cluster.registros) == 0:
             return
 
-        for reg in cluster.registros:
-            reg.is_centroid = False
+        cluster.registros = [r for r in cluster.registros if not r.is_centroid]
 
         dimensao = len(cluster.registros[0].dados)
         soma = [0.0] * dimensao
@@ -79,22 +80,72 @@ class Clusterizacao:
                 soma[i] += reg.dados[i]
 
         media = [x / len(cluster.registros) for x in soma]
-
         cluster.registros.append(Registro(media, is_centroid=True))
 
+    def analisar_dispersao_e_reorganizar(self):
+        novos_clusters = []
+        for cluster in self.clusters:
+            centroide = cluster.get_centroide()
+            registros_distantes = []
 
-if __name__ == "__main__":
-    r1 = Registro([1.0, 2.0])
-    r2 = Registro([8.0, 9.0])
+            for reg in cluster.registros:
+                if not reg.is_centroid:
+                    dist = distancia_euclidiana(reg.dados, centroide)
+                    if dist > self.limiar:
+                        registros_distantes.append(reg)
 
-    c = Clusterizacao()
-    c.iniciar_com_dois(r1, r2)
+            for reg in registros_distantes:
+                cluster.remover_registro(reg)
+                novo_cluster = Cluster(reg)
+                novos_clusters.append(novo_cluster)
 
-    print("Estado inicial:")
-    c.exibir_clusters()
+            self.recalcular_centroide(cluster)
 
-    r3 = Registro([2.0, 3.0])
-    c.atribuir_registro(r3)
+        self.clusters.extend(novos_clusters)
 
-    print("\nApós adicionar novo registro:")
-    c.exibir_clusters()
+    def converter_categorico_para_numerico(self, registros):
+        """Etapa 5 — converte strings para inteiros, sem alterar os dados originais."""
+        transformado = []
+        mapeamento = defaultdict(dict)
+
+        for reg in registros:
+            convertido = []
+            for i, val in enumerate(reg.dados):
+                if isinstance(val, str):
+                    if val not in mapeamento[i]:
+                        mapeamento[i][val] = len(mapeamento[i])
+                    convertido.append(mapeamento[i][val])
+                else:
+                    convertido.append(val)
+            transformado.append(convertido)
+
+        return transformado
+
+
+# Execução
+r1 = Registro([1.0, 2.0])
+r2 = Registro([8.0, 9.0])
+
+c = Clusterizacao(limiar=4.0)
+c.iniciar_com_dois(r1, r2)
+
+print("Estado inicial:")
+c.exibir_clusters()
+
+c.atribuir_registro(Registro([2.0, 3.0]))
+c.atribuir_registro(Registro([15.0, 15.0]))
+
+print("\nApós atribuições:")
+c.exibir_clusters()
+
+c.analisar_dispersao_e_reorganizar()
+
+print("\nApós análise de dispersão e reorganização:")
+c.exibir_clusters()
+
+print("\nConversão de dados categóricos:")
+categoricos = [Registro(['azul', 'grande']), Registro(['vermelho', 'pequeno']), Registro(['azul', 'pequeno'])]
+convertidos = c.converter_categorico_para_numerico(categoricos)
+for original, convertido in zip(categoricos, convertidos):
+    print(f"{original.dados} -> {convertido}")
+
